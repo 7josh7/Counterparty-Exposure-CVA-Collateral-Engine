@@ -45,8 +45,6 @@ configs/
   sofr_snapshot_case.json    Snapshot-driven SOFR CVA run
   sofr_multi_curve_case.json Larger SOFR portfolio using the same snapshot interface
 
-docs/
-  mercurio_sofr_xva_alignment.tex
 
 notebooks/
   counterparty_exposure_cva_math_demo.ipynb
