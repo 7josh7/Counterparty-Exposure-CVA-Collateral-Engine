@@ -1,0 +1,25 @@
+# Keep docs local
+docs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual envs
+env/
+venv/
+.venv/
+
+# OS files
+Thumbs.db
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+outputs/*/
+!outputs/.gitkeep

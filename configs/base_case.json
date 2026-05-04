@@ -1,0 +1,81 @@
+{
+  "market": {
+    "source": "static"
+  },
+  "curve": {
+    "tenors": [0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0],
+    "zero_rates": [0.049, 0.047, 0.044, 0.040, 0.037, 0.034, 0.033, 0.0335, 0.0345, 0.035, 0.0355]
+  },
+  "trades": [
+    {
+      "trade_id": "PAY_5Y_100MM",
+      "notional": 100000000,
+      "fixed_rate": 0.0365,
+      "maturity": 5.0,
+      "direction": "payer",
+      "pay_frequency": 2
+    },
+    {
+      "trade_id": "REC_7Y_80MM",
+      "notional": 80000000,
+      "fixed_rate": 0.0325,
+      "maturity": 7.0,
+      "direction": "receiver",
+      "pay_frequency": 2
+    },
+    {
+      "trade_id": "PAY_10Y_60MM",
+      "notional": 60000000,
+      "fixed_rate": 0.0350,
+      "maturity": 10.0,
+      "direction": "payer",
+      "pay_frequency": 2
+    },
+    {
+      "trade_id": "REC_3Y_120MM",
+      "notional": 120000000,
+      "fixed_rate": 0.0420,
+      "maturity": 3.0,
+      "direction": "receiver",
+      "pay_frequency": 2
+    },
+    {
+      "trade_id": "PAY_15Y_50MM",
+      "notional": 50000000,
+      "fixed_rate": 0.0380,
+      "maturity": 15.0,
+      "direction": "payer",
+      "pay_frequency": 2
+    }
+  ],
+  "simulation": {
+    "num_paths": 6000,
+    "exposure_frequency_months": 3,
+    "mean_reversion": 0.08,
+    "volatility": 0.012,
+    "seed": 42,
+    "pfe_percentile": 0.95
+  },
+  "counterparty_credit": {
+    "recovery_rate": 0.40,
+    "cds_tenors": [1.0, 3.0, 5.0, 7.0, 10.0],
+    "cds_spreads_bps": [85, 115, 145, 170, 195]
+  },
+  "own_credit": {
+    "recovery_rate": 0.40,
+    "cds_tenors": [1.0, 3.0, 5.0, 7.0, 10.0],
+    "cds_spreads_bps": [55, 80, 105, 130, 155]
+  },
+  "collateral": {
+    "threshold": 5000000,
+    "minimum_transfer_amount": 500000,
+    "margin_frequency_months": 1,
+    "margin_period_of_risk_months": 2
+  },
+  "wrong_way_risk": {
+    "alpha": 0.75
+  },
+  "funding": {
+    "funding_spread_bps": 75
+  }
+}

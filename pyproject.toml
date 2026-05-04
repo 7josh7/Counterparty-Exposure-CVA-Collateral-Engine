@@ -1,0 +1,30 @@
+[project]
+name = "counterparty-exposure-cva-engine"
+version = "0.1.0"
+description = "Research-style counterparty exposure, CVA, collateral, netting, funding, and wrong-way-risk engine for OTC rates portfolios."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "matplotlib>=3.7"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0"
+]
+
+[project.scripts]
+cva-engine = "cva_engine.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
