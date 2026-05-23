@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -35,10 +35,14 @@ class EngineResult:
     no_netting_profile: ExposureProfile
 
 
+DEFAULT_CONVERGENCE_PATHS = (1_000, 2_500, 5_000, 10_000, 25_000, 50_000)
+
+
 def run_engine(config: RunConfig) -> EngineResult:
     market = build_market_from_config(config)
     discount_curve = market.discount_curve
     portfolio = build_portfolio(config.trades)
+    total_notional = float(sum(abs(trade.notional) for trade in portfolio))
     max_maturity = max(trade.maturity for trade in portfolio)
     simulation = simulate_hull_white_factor(max_maturity, config.simulation)
 
@@ -121,8 +125,29 @@ def run_engine(config: RunConfig) -> EngineResult:
         discount_curve=discount_curve,
         funding_spread=config.funding.funding_spread_bps / 10000.0,
     )
+    cva_uncollateralized_se = cva_standard_error(
+        simulation.times,
+        netting_profile.positive_exposures,
+        discount_curve,
+        counterparty_hazard,
+    )
+    cva_collateralized_se = cva_standard_error(
+        simulation.times,
+        collateralized_profile.positive_exposures,
+        discount_curve,
+        counterparty_hazard,
+    )
+    cva_no_netting_se = cva_standard_error(
+        simulation.times,
+        no_netting_profile.positive_exposures,
+        discount_curve,
+        counterparty_hazard,
+    )
 
     summary = {
+        "mc_paths": float(config.simulation.num_paths),
+        "pfe_percentile": float(config.simulation.pfe_percentile),
+        "total_notional": total_notional,
         "current_portfolio_mtm": float(np.mean(portfolio_values[:, 0])),
         "current_exposure": float(netting_profile.ee[0]),
         "epe_netting": netting_profile.epe,
@@ -135,6 +160,21 @@ def run_engine(config: RunConfig) -> EngineResult:
         "cva_uncollateralized": cva_uncollateralized,
         "cva_collateralized": cva_collateralized,
         "cva_no_netting": cva_no_netting,
+        "cva_uncollateralized_bp": bp_of_notional(cva_uncollateralized, total_notional),
+        "cva_collateralized_bp": bp_of_notional(cva_collateralized, total_notional),
+        "cva_no_netting_bp": bp_of_notional(cva_no_netting, total_notional),
+        "cva_uncollateralized_se": cva_uncollateralized_se,
+        "cva_collateralized_se": cva_collateralized_se,
+        "cva_no_netting_se": cva_no_netting_se,
+        "cva_uncollateralized_se_bp": bp_of_notional(
+            cva_uncollateralized_se,
+            total_notional,
+        ),
+        "cva_collateralized_se_bp": bp_of_notional(
+            cva_collateralized_se,
+            total_notional,
+        ),
+        "cva_no_netting_se_bp": bp_of_notional(cva_no_netting_se, total_notional),
         "dva_uncollateralized": dva_uncollateralized,
         "dva_collateralized": dva_collateralized,
         "bva_uncollateralized_dva_minus_cva": dva_uncollateralized - cva_uncollateralized,
@@ -166,6 +206,41 @@ def run_engine(config: RunConfig) -> EngineResult:
     )
 
 
+def run_convergence(
+    config: RunConfig,
+    path_counts: list[int] | tuple[int, ...] | None = None,
+) -> pd.DataFrame:
+    """Run path-count convergence for CVA estimates and standard errors."""
+
+    counts = sorted(set(path_counts or DEFAULT_CONVERGENCE_PATHS))
+    max_paths = int(config.simulation.num_paths)
+    counts = [count for count in counts if count <= max_paths]
+    if max_paths not in counts:
+        counts.append(max_paths)
+
+    rows = []
+    for count in counts:
+        simulation = replace(config.simulation, num_paths=int(count))
+        result = run_engine(replace(config, simulation=simulation))
+        summary = result.summary
+        rows.append(
+            {
+                "mc_paths": int(count),
+                "cva_uncollateralized": summary["cva_uncollateralized"],
+                "cva_uncollateralized_bp": summary["cva_uncollateralized_bp"],
+                "cva_uncollateralized_se": summary["cva_uncollateralized_se"],
+                "cva_uncollateralized_se_bp": summary["cva_uncollateralized_se_bp"],
+                "cva_collateralized": summary["cva_collateralized"],
+                "cva_collateralized_bp": summary["cva_collateralized_bp"],
+                "cva_collateralized_se": summary["cva_collateralized_se"],
+                "cva_collateralized_se_bp": summary["cva_collateralized_se_bp"],
+                "mpfe_netting": summary["mpfe_netting"],
+                "mpfe_collateralized": summary["mpfe_collateralized"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def build_market_from_config(config: RunConfig) -> RatesMarket:
     """Build RatesMarket from either static curve config or market snapshot file."""
 
@@ -189,6 +264,45 @@ def build_market_from_config(config: RunConfig) -> RatesMarket:
         )
 
     raise ValueError(f"Unsupported market source: {config.market.source}")
+
+
+def cva_pathwise_contributions(
+    times: np.ndarray,
+    exposures: np.ndarray,
+    discount_curve: DiscountCurve,
+    hazard_curve: HazardCurve,
+) -> np.ndarray:
+    """Return independent pathwise CVA losses for MC error estimation."""
+
+    dfs = discount_curve.df(times)
+    marginal_pd = hazard_curve.marginal_default_probabilities(times)
+    weights = hazard_curve.lgd * dfs * marginal_pd
+    return np.sum(exposures * weights, axis=1)
+
+
+def cva_standard_error(
+    times: np.ndarray,
+    exposures: np.ndarray,
+    discount_curve: DiscountCurve,
+    hazard_curve: HazardCurve,
+) -> float:
+    """Monte Carlo standard error for the unilateral CVA estimator."""
+
+    contributions = cva_pathwise_contributions(
+        times=times,
+        exposures=exposures,
+        discount_curve=discount_curve,
+        hazard_curve=hazard_curve,
+    )
+    if contributions.size <= 1:
+        return 0.0
+    return float(np.std(contributions, ddof=1) / np.sqrt(contributions.size))
+
+
+def bp_of_notional(value: float, total_notional: float) -> float:
+    if total_notional <= 0.0:
+        return float("nan")
+    return float(value / total_notional * 10000.0)
 
 
 def funding_cost_proxy(

@@ -44,26 +44,14 @@ def value_portfolio_paths(
             else np.zeros_like(shifts_at_date)
         )
         for trade_index, trade in enumerate(portfolio):
-            values = []
-            for path_index, shift in enumerate(shifts_at_date):
-                if integrated_factors is None:
-                    integral_at = None
-                else:
-                    path_integrals = integrated_factors[path_index]
-
-                    def integral_at(target_time: float, path_integrals=path_integrals) -> float:
-                        return float(np.interp(float(target_time), times, path_integrals))
-
-                values.append(
-                    trade.value(
-                        float(eval_time),
-                        market,
-                        float(shift),
-                        factor_integral=float(integrals_at_date[path_index]),
-                        factor_integral_at=integral_at,
-                    )
-                )
-            trade_values[:, date_index, trade_index] = values
+            trade_values[:, date_index, trade_index] = trade.value_paths(
+                eval_time=float(eval_time),
+                market=market,
+                rate_shifts=shifts_at_date,
+                factor_integrals=integrals_at_date,
+                integrated_factors=integrated_factors,
+                simulation_times=times,
+            )
 
     portfolio_values = np.sum(trade_values, axis=2)
     return portfolio_values, trade_values
@@ -100,7 +88,7 @@ def profile_from_exposures(
     pfe = np.quantile(positive_exposures, pfe_percentile, axis=0)
 
     horizon = max(float(times[-1] - times[0]), 1e-12)
-    epe = float(np.trapezoid(ee, times) / horizon)
+    epe = float(np.trapz(ee, times) / horizon)
     mpfe = float(np.max(pfe))
     ead = float(ead_alpha * epe)
 

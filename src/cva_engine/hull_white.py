@@ -64,13 +64,14 @@ def hw_discount_factor(
     curve,
     eval_time: float,
     pay_time: float | np.ndarray,
-    factor_value: float,
+    factor_value: float | np.ndarray,
     mean_reversion: float,
     volatility: float,
 ) -> float | np.ndarray:
     """Pathwise P(eval_time, pay_time) under the exact Hull-White bond formula."""
 
     pay_array = np.asarray(pay_time, dtype=float)
+    factor_array = np.asarray(factor_value, dtype=float)
     eval_scalar = float(eval_time)
     valid_pay = np.maximum(pay_array, eval_scalar)
     base_forward = curve.df(valid_pay) / curve.df(eval_scalar)
@@ -79,13 +80,23 @@ def hw_discount_factor(
         * a_function(mean_reversion, volatility, eval_scalar, valid_pay)
         / a_function(mean_reversion, volatility, 0.0, valid_pay)
     )
-    stochastic_term = np.exp(
-        -np.asarray(b_function(mean_reversion, eval_scalar, valid_pay), dtype=float)
-        * float(factor_value)
-    )
-    result = base_forward * convexity_ratio * stochastic_term
-    result = np.where(pay_array <= eval_scalar, 1.0, result)
-    if np.isscalar(pay_time):
+    b = np.asarray(b_function(mean_reversion, eval_scalar, valid_pay), dtype=float)
+    if factor_array.ndim == 0:
+        stochastic_term = np.exp(-b * float(factor_array))
+        result = base_forward * convexity_ratio * stochastic_term
+        result = np.where(pay_array <= eval_scalar, 1.0, result)
+    elif pay_array.ndim == 0:
+        result = float(base_forward) * float(convexity_ratio) * np.exp(-float(b) * factor_array)
+        if float(pay_array) <= eval_scalar:
+            result = np.ones_like(factor_array, dtype=float)
+    else:
+        result = (
+            np.asarray(base_forward, dtype=float)[None, :]
+            * np.asarray(convexity_ratio, dtype=float)[None, :]
+            * np.exp(-factor_array[:, None] * b[None, :])
+        )
+        result[:, pay_array <= eval_scalar] = 1.0
+    if np.isscalar(pay_time) and np.isscalar(factor_value):
         return float(result)
     return result
 

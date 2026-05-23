@@ -8,7 +8,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from cva_engine.analytics import run_engine
+from cva_engine.analytics import DEFAULT_CONVERGENCE_PATHS, run_convergence, run_engine
 from cva_engine.config import RunConfig
 from cva_engine.curve_loader import market_diagnostics_from_snapshot
 
@@ -32,6 +32,16 @@ def main(argv: list[str] | None = None) -> int:
         default="outputs/base_case",
         help="Directory for generated outputs.",
     )
+    parser.add_argument(
+        "--convergence",
+        action="store_true",
+        help="Run path-count convergence and write cva_convergence.csv/png.",
+    )
+    parser.add_argument(
+        "--convergence-paths",
+        default=",".join(str(x) for x in DEFAULT_CONVERGENCE_PATHS),
+        help="Comma-separated MC path counts for convergence, capped at config num_paths.",
+    )
     args = parser.parse_args(argv)
 
     config_path = args.config or args.config_path or "configs/base_case.json"
@@ -49,6 +59,11 @@ def main(argv: list[str] | None = None) -> int:
 
     _plot_exposures(result, out_dir / "exposure_profiles.png")
     _plot_cva_comparison(result.summary, out_dir / "cva_comparison.png")
+    if args.convergence:
+        path_counts = _parse_path_counts(args.convergence_paths)
+        convergence = run_convergence(config, path_counts)
+        convergence.to_csv(out_dir / "cva_convergence.csv", index=False)
+        _plot_cva_convergence(convergence, out_dir / "cva_convergence.png")
 
     print("CVA engine run complete.")
     print(f"Outputs: {out_dir.resolve()}")
@@ -63,12 +78,28 @@ def main(argv: list[str] | None = None) -> int:
         f"{result.summary['cva_no_netting']:,.0f}"
     )
     print(
+        "CVA bp / SE bp: "
+        f"{result.summary['cva_uncollateralized_bp']:.3f} / "
+        f"{result.summary['cva_uncollateralized_se_bp']:.3f}; "
+        f"MC paths: {int(result.summary['mc_paths']):,}"
+    )
+    print(
         "WWR multiplier: "
         f"{result.summary['wrong_way_risk_multiplier']:.3f}; "
         "EPE netting: "
         f"{result.summary['epe_netting']:,.0f}"
     )
     return 0
+
+
+def _parse_path_counts(raw: str) -> list[int]:
+    counts = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        counts.append(int(item))
+    return counts or list(DEFAULT_CONVERGENCE_PATHS)
 
 
 def write_market_diagnostics(config: RunConfig, output_dir: Path) -> None:
@@ -134,6 +165,34 @@ def _plot_cva_comparison(summary: dict[str, float], path: Path) -> None:
             va="bottom",
             fontsize=9,
         )
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def _plot_cva_convergence(frame, path: Path) -> None:
+    fig, ax1 = plt.subplots(figsize=(9, 5))
+    ax1.plot(
+        frame["mc_paths"],
+        frame["cva_uncollateralized_bp"],
+        marker="o",
+        label="CVA bp",
+        color="#3f6f8f",
+    )
+    ax1.fill_between(
+        frame["mc_paths"],
+        frame["cva_uncollateralized_bp"] - 1.96 * frame["cva_uncollateralized_se_bp"],
+        frame["cva_uncollateralized_bp"] + 1.96 * frame["cva_uncollateralized_se_bp"],
+        color="#3f6f8f",
+        alpha=0.18,
+        label="95% MC error band",
+    )
+    ax1.set_xscale("log")
+    ax1.set_xlabel("MC paths")
+    ax1.set_ylabel("CVA (bp of notional)")
+    ax1.set_title("CVA Monte Carlo Convergence")
+    ax1.grid(True, alpha=0.25)
+    ax1.legend()
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)

@@ -11,7 +11,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cva_engine.analytics import run_engine
+from cva_engine.analytics import run_convergence, run_engine
 from cva_engine.config import RunConfig
 from cva_engine.curves import DiscountCurve
 from cva_engine.hull_white import hw_discount_factor
@@ -105,6 +105,15 @@ class CvaEngineTests(unittest.TestCase):
         )
         self.assertGreater(result.summary["epe_netting"], 0.0)
         self.assertGreater(result.summary["wrong_way_risk_multiplier"], 0.0)
+        self.assertGreater(result.summary["total_notional"], 0.0)
+        self.assertGreaterEqual(result.summary["cva_uncollateralized_se"], 0.0)
+        self.assertIn("cva_uncollateralized_se_bp", result.summary)
+
+    def test_convergence_grid_reports_pathwise_standard_errors(self) -> None:
+        config = RunConfig.from_dict(_small_config())
+        frame = run_convergence(config, path_counts=[100, 200])
+        self.assertEqual(list(frame["mc_paths"]), [100, 200, 400])
+        self.assertTrue((frame["cva_uncollateralized_se_bp"] >= 0.0).all())
 
     def test_multi_curve_market_uses_projection_for_forward_leg(self) -> None:
         discount = DiscountCurve(

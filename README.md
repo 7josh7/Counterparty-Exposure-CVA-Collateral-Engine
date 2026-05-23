@@ -124,6 +124,9 @@ CVA = (1 - R) * sum_i DF(0,t_i) * EE(t_i) * DeltaPD(t_i)
 
 Collateralized and no-netting CVA are computed by replacing the exposure profile with the corresponding collateral-adjusted or trade-level exposure profile.
 
+The summary also reports CVA in basis points of total notional and a Monte
+Carlo standard error computed from pathwise CVA contributions.
+
 ## Running the Engine
 
 From `Counterparty Exposure CVA Collateral Engine/`:
@@ -154,11 +157,19 @@ The larger SOFR portfolio case uses the same snapshot interface:
 python -m cva_engine.cli configs/sofr_multi_curve_case.json --out outputs/sofr_multi_curve_case
 ```
 
+Add `--convergence` to write a path-count convergence table and chart:
+
+```powershell
+python -m cva_engine.cli configs/sofr_multi_curve_case.json --out outputs/sofr_multi_curve_case --convergence
+```
+
 ## Outputs
 
 Each run writes:
 
 - `summary.json`: headline CVA, DVA, exposure, WWR, and funding metrics;
+- `cva_convergence.csv`: optional MC path-count convergence table;
+- `cva_convergence.png`: optional CVA convergence chart with MC error bands;
 - `portfolio.csv`: trade-level inception MTM and par-rate diagnostics;
 - `exposure_profiles.csv`: EE, PFE, ENE, collateral, and netting profiles;
 - `exposure_profiles.png`: exposure profile chart;

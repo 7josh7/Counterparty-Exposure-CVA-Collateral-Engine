@@ -94,9 +94,9 @@ class RatesMarket:
         eval_time: float,
         start_time: float,
         end_time: float,
-        rate_shift: float = 0.0,
+        rate_shift: float | np.ndarray = 0.0,
         year_fraction: float | None = None,
-    ) -> float:
+    ) -> float | np.ndarray:
         start = max(float(start_time), float(eval_time))
         end = float(end_time)
         tau = float(year_fraction) if year_fraction is not None else end - start
@@ -104,7 +104,10 @@ class RatesMarket:
             return 0.0
         start_df = self.projection_discount_between(eval_time, start, rate_shift)
         end_df = self.projection_discount_between(eval_time, end, rate_shift)
-        return float((start_df / end_df - 1.0) / tau)
+        result = (start_df / end_df - 1.0) / tau
+        if np.isscalar(rate_shift):
+            return float(result)
+        return result
 
     def forward_rate(
         self,
@@ -128,8 +131,8 @@ class RatesMarket:
         self,
         start_time: float,
         eval_time: float,
-        factor_integral: float,
-    ) -> float:
+        factor_integral: float | np.ndarray,
+    ) -> float | np.ndarray:
         """Realized exp(integral_start^eval_time s(u)du) under deterministic basis."""
 
         start = float(start_time)
@@ -144,7 +147,10 @@ class RatesMarket:
             start,
             end,
         )
-        return float(np.exp(float(factor_integral) + deterministic_integral))
+        result = np.exp(np.asarray(factor_integral, dtype=float) + deterministic_integral)
+        if np.isscalar(factor_integral):
+            return float(result)
+        return result
 
 
 def single_curve_market(

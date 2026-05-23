@@ -42,7 +42,7 @@
     }
   ],
   "simulation": {
-    "num_paths": 6000,
+    "num_paths": 50000,
     "exposure_frequency_months": 3,
     "mean_reversion": 0.03,
     "volatility": 0.01,
